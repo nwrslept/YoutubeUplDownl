@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt
 from qasync import asyncSlot
 from services.downloader import async_download_youtube_video
 from services.uploader import upload_video_to_youtube
+import os
 
 class MainWindow(QWidget):
     def __init__(self):
@@ -13,6 +14,7 @@ class MainWindow(QWidget):
         self.setWindowTitle("YouTube Video Uploader")
         self.setFixedSize(600, 400)
         self.video_path = None
+        self.download_folder = os.getcwd()  # за замовчуванням — поточна папка
 
         layout = QVBoxLayout()
         self.url_input = QLineEdit()
@@ -35,11 +37,17 @@ class MainWindow(QWidget):
         layout.addWidget(QLabel("🔗 Встав посилання на відео YouTube:"))
         layout.addWidget(self.url_input)
 
+        folder_btn = QPushButton("📁 Обрати папку для збереження")
+        folder_btn.clicked.connect(self.choose_download_folder)
+        layout.addWidget(folder_btn)
+
         self.quality_selector.addItems(["480p", "720p", "1080p", "Максимальна якість"])
         layout.addWidget(QLabel("📺 Обрати якість відео:"))
         layout.addWidget(self.quality_selector)
 
         layout.addWidget(self.no_audio_checkbox)
+
+
 
         download_btn = QPushButton("⬇️ Завантажити з YouTube")
         download_btn.clicked.connect(self.download_video)
@@ -55,6 +63,12 @@ class MainWindow(QWidget):
 
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.status_label)
+
+    def choose_download_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Виберіть папку для збереження")
+        if folder:
+            self.download_folder = folder
+            self.status_label.setText(f"📁 Папка для збереження: {folder}")
 
     def get_format(self):
         quality = self.quality_selector.currentText()
@@ -78,9 +92,12 @@ class MainWindow(QWidget):
 
     def update_progress(self, percent: float):
         percent_int = int(percent)
-        if percent_int > self._last_progress:
+        if percent_int == 100:
+            self.progress_bar.setValue(100)
+        elif percent_int > self._last_progress:
             self.progress_bar.setValue(percent_int)
             self._last_progress = percent_int
+            self.status_label.setText(f"⏳ Завантаження... ")
 
     @asyncSlot()
     async def download_video(self):
@@ -97,7 +114,9 @@ class MainWindow(QWidget):
         self.status_label.setText("⏳ Завантаження...")
 
         try:
-            self.video_path = await async_download_youtube_video(url, fmt, progress_hook=self.update_progress)
+            self.video_path = await async_download_youtube_video(
+                url, fmt, progress_hook=self.update_progress, output_dir=self.download_folder
+            )
             self.progress_bar.setValue(100)
             self.status_label.setText(f"✅ Завантажено: {self.video_path}")
         except Exception as e:
