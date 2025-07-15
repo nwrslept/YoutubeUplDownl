@@ -58,20 +58,11 @@ class ClickableDropLabel(QLabel):
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+        self.current_theme = "dark"
+        self.load_stylesheet(self.current_theme)
 
         self.setWindowTitle("YouTube Downloader & Uploader")
         self.setGeometry(100, 100, 1600, 900)
-
-        # Load external stylesheet
-        try:
-            base_dir = os.path.dirname(os.path.abspath(__file__))  # Directory of this script
-            style_path = os.path.join(base_dir, "..", "styles.qss")  # Stylesheet located one level up
-            style_path = os.path.abspath(style_path)
-
-            with open(style_path, "r", encoding="utf-8") as f:
-                self.setStyleSheet(f.read())
-        except Exception as e:
-            print(f"⚠️ Unable to load styles.qss: {e}")
 
         self.cancel_flag = {"cancel": False}
         self.selected_folder = "."
@@ -109,15 +100,17 @@ class MainWindow(QWidget):
         left_layout.addWidget(self.quality_box)
 
         self.folder_btn = QPushButton("Select download folder")
+        self.folder_btn.setObjectName("folder_btn")
         self.folder_btn.clicked.connect(self.select_folder)
         left_layout.addWidget(self.folder_btn)
 
         self.download_btn = QPushButton("Download")
-        self.download_btn.setStyleSheet("background-color: #007acc;")
+        self.download_btn.setObjectName("download_btn")
         self.download_btn.clicked.connect(self.download_video)
         left_layout.addWidget(self.download_btn)
 
         self.cancel_btn = QPushButton("❌ Cancel")
+        self.cancel_btn.setObjectName("cancel_btn")
         self.cancel_btn.clicked.connect(self.cancel_download)
         self.cancel_btn.setEnabled(False)
         left_layout.addWidget(self.cancel_btn)
@@ -142,6 +135,7 @@ class MainWindow(QWidget):
         right_layout.addLayout(top_right_row)
 
         self.thumbnail_btn = QPushButton("Upload thumbnail image")
+        self.thumbnail_btn.setObjectName("thumbnail_btn")
         self.thumbnail_btn.clicked.connect(self.load_thumbnail_from_file)
         right_layout.addWidget(self.thumbnail_btn)
 
@@ -160,14 +154,18 @@ class MainWindow(QWidget):
         self.privacy_box.addItem("Unlisted", "unlisted")
         right_layout.addWidget(self.privacy_box)
 
-        # Upload button and progress label
         self.upload_btn = QPushButton("Upload to YouTube")
-        self.upload_btn.setStyleSheet("background-color: #28a745;")
+        self.upload_btn.setObjectName("upload_btn")
         self.upload_btn.clicked.connect(self.upload_video_async)
         right_layout.addWidget(self.upload_btn)
 
+        self.theme_toggle_btn = QPushButton("🌙")
+        self.theme_toggle_btn.setObjectName("themeToggleButton")
+        self.theme_toggle_btn.clicked.connect(self.toggle_theme)
+        left_layout.addWidget(self.theme_toggle_btn, alignment=Qt.AlignmentFlag.AlignLeft)
+
         self.upload_percent_label = QLabel("")
-        self.upload_percent_label.setStyleSheet("color: #ddd; font-weight: bold; padding: 4px 0;")
+        self.upload_percent_label.setObjectName("upload_percent_label")
         right_layout.addWidget(self.upload_percent_label)
 
         self.video_url_field = QLineEdit()
@@ -304,3 +302,16 @@ class MainWindow(QWidget):
             await asyncio.sleep(2)
             self.upload_btn.setEnabled(True)
             self.upload_btn.setText("Upload to YouTube")
+
+    def load_stylesheet(self, theme: str):
+        try:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            style_path = os.path.join(base_dir, "..", f"styles_{theme}.qss")
+            with open(style_path, "r", encoding="utf-8") as f:
+                self.setStyleSheet(f.read())
+        except Exception as e:
+            print(f"⚠️ Не вдалося завантажити тему '{theme}':", e)
+
+    def toggle_theme(self):
+        self.current_theme = "light" if self.current_theme == "dark" else "dark"
+        self.load_stylesheet(self.current_theme)
