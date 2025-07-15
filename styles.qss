@@ -1,3 +1,4 @@
+/* Загальні стилі для віджетів */
 QWidget {
     background-color: #2b2b2b;
     color: #dcdcdc;
@@ -5,13 +6,60 @@ QWidget {
     font-size: 15px;
 }
 
-QLineEdit, QComboBox, QCheckBox, QPushButton {
-    background-color: #3c3f41;
-    border: 1px solid #5c5c5c;
+/* Групові бокси */
+QGroupBox {
+    background-color: #2b2b2b;
+    color: #dcdcdc;
+    border: 1px solid #555555;
     border-radius: 8px;
-    padding: 8px 12px;
+    font-weight: bold;
+    margin-top: 6px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 3px;
+}
+
+/* Лейбли */
+QLabel {
+    font-weight: 600;
+    margin-top: 6px;
+    margin-bottom: 6px;
+    padding: 2px 4px; /* Додано padding, щоб текст не обрізався */
+}
+
+/* Вхідні поля */
+QLineEdit, QComboBox, QTextEdit {
+    background-color: #3c3f41;
     color: #f0f0f0;
-    min-height: 30px;
+    border: 1px solid #5c5c5c;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+
+/* Спеціально для QComboBox padding трохи менший */
+QComboBox {
+    padding: 4px 8px;
+}
+
+/* CheckBox */
+QCheckBox {
+    color: #dcdcdc;
+    padding: 4px;
+}
+
+/* Кнопки з padding та висотою, щоб текст не обрізався */
+QPushButton {
+    background-color: #3c3f41;
+    color: #f0f0f0;
+    border: 1px solid #5c5c5c;
+    border-radius: 6px;
+    padding: 8px 12px;       /* Збільшений padding зверху/знизу */
+    min-height: 36px;        /* Мінімальна висота для кнопок */
+    font-size: 15px;
+    font-weight: 600;
 }
 
 QPushButton:hover {
@@ -22,12 +70,52 @@ QPushButton:pressed {
     background-color: #4a6ea9;
 }
 
-QLabel {
-    font-weight: 600;
-    margin-top: 6px;
-    margin-bottom: 6px;
+/* Прев’ю відео */
+QLabel#videoPreview, QLabel#selectedVideoPreview {
+    background-color: #222;
+    color: #aaa;
+    border-radius: 6px;
+    min-height: 180px;
+    font-weight: normal;
+    text-align: center;
+    qproperty-alignment: AlignCenter;
+    padding: 10px; /* padding щоб текст не обрізався */
 }
 
+/* Прев’ю вибраного прев’ю для обкладинки */
+QLabel#selectedThumbLabel {
+    background-color: #333;
+    border-radius: 6px;
+    min-width: 320px;
+    min-height: 180px;
+    qproperty-alignment: AlignCenter;
+    padding: 10px; /* padding для кращого центрування */
+}
+
+/* Прев’ю для вибраного фото (новий селектор) */
+QLabel#photoPreview {
+    background-color: #222;
+    color: #aaa;
+    border-radius: 6px;
+    min-width: 480px;
+    min-height: 270px;
+    qproperty-alignment: AlignCenter;
+    padding: 10px;
+}
+
+/* Drop Zone */
+QLabel#dropZone {
+    border: 2px dashed #555555;
+    background-color: #2b2b2b;
+    color: #bbbbbb;
+    border-radius: 8px;
+    padding: 20px;
+    font-weight: bold;
+    font-size: 16px;
+    qproperty-alignment: AlignCenter;
+}
+
+/* Progress Bar */
 QProgressBar {
     background-color: #3c3f41;
     border: 1px solid #5c5c5c;

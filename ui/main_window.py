@@ -1,224 +1,196 @@
+# main_window.py
+
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
-    QFileDialog, QComboBox, QCheckBox, QProgressBar, QSizePolicy, QSpacerItem
+    QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
+    QLineEdit, QComboBox, QFileDialog, QTextEdit, QFrame
 )
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QPixmap, QImage
+from PyQt6.QtCore import Qt
 from qasync import asyncSlot
-from services.downloader import async_download_youtube_video, async_get_video_info
-import os
-import requests
-from functools import partial
+from services.downloader import async_get_video_info, async_download_youtube_video
+import aiohttp
 import asyncio
 
 
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("YouTube Video Uploader")
-        self.setMinimumSize(900, 550)
-        self.video_path = None
-        self.download_folder = os.getcwd()
-        self._last_progress = 0
+        self.setWindowTitle("YouTube Downloader & Uploader")
+        self.setGeometry(100, 100, 1600, 900)
+        self.setStyleSheet("background-color: #2e2e2e; color: white;")
+        self.cancel_flag = {"cancel": False}
+        self.setup_ui()
 
-        # Main horizontal layout
-        main_layout = QHBoxLayout()
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(30)
+    def setup_ui(self):
+        main_layout = QHBoxLayout(self)
 
-        # Left column: URL input, video preview, download button
-        left_layout = QVBoxLayout()
-        left_layout.setSpacing(15)
+        # ======= LEFT SIDE (Downloader) =======
+        left_frame = QFrame()
+        left_layout = QVBoxLayout(left_frame)
+        left_frame.setStyleSheet("border-right: 2px solid #444444;")
 
-        left_layout.addWidget(QLabel("🔗 Paste YouTube video link:"))
+        # Preview
+        self.left_preview_label = QLabel("Превʼю відео")
+        self.left_preview_label.setFixedHeight(200)
+        self.left_preview_label.setStyleSheet("background-color: #444;")
+        self.left_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        left_layout.addWidget(self.left_preview_label)
+
+        # URL Input
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("https://www.youtube.com/watch?v=...")
-        self.url_input.setMinimumHeight(36)
+        self.url_input.setPlaceholderText("Вставте посилання на відео YouTube...")
+        self.url_input.textChanged.connect(self.on_url_changed)
         left_layout.addWidget(self.url_input)
 
-        self.video_title_label = QLabel()
-        self.video_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.video_title_label.setWordWrap(True)
-        self.video_title_label.setVisible(False)
-        left_layout.addWidget(self.video_title_label)
+        # Quality Selection
+        self.quality_box = QComboBox()
+        self.quality_box.addItem("1080p", "bestvideo[height<=1080]+bestaudio/best[height<=1080]")
+        self.quality_box.addItem("720p", "bestvideo[height<=720]+bestaudio/best[height<=720]")
+        self.quality_box.addItem("480p", "bestvideo[height<=480]+bestaudio/best[height<=480]")
+        self.quality_box.addItem("360p", "bestvideo[height<=360]+bestaudio/best[height<=360]")
+        self.quality_box.addItem("Аудіо", "bestaudio")
+        left_layout.addWidget(self.quality_box)
 
-        self.thumbnail_label = QLabel()
-        self.thumbnail_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.thumbnail_label.setVisible(False)
-        self.thumbnail_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.thumbnail_label.setFixedHeight(180)
-        left_layout.addWidget(self.thumbnail_label)
+        # Choose Folder
+        self.folder_btn = QPushButton("Вибрати папку збереження")
+        self.folder_btn.clicked.connect(self.select_folder)
+        left_layout.addWidget(self.folder_btn)
 
-        left_layout.addSpacerItem(QSpacerItem(20, 20))  # Visual spacing
-
-        self.download_btn = QPushButton("⬇️ Download from YouTube")
-        self.download_btn.setMinimumHeight(36)
+        # Download Button
+        self.download_btn = QPushButton("Завантажити")
+        self.download_btn.setStyleSheet("background-color: #007acc;")
+        self.download_btn.clicked.connect(self.download_video)
         left_layout.addWidget(self.download_btn)
+
+        # Cancel Button
+        self.cancel_btn = QPushButton("❌ Скасувати")
+        self.cancel_btn.clicked.connect(self.cancel_download)
+        self.cancel_btn.setEnabled(False)
+        left_layout.addWidget(self.cancel_btn)
 
         left_layout.addStretch()
 
-        # Right column: download options
-        right_layout = QVBoxLayout()
-        right_layout.setSpacing(15)
+        # ======= RIGHT SIDE (Uploader) =======
+        right_frame = QFrame()
+        right_layout = QVBoxLayout(right_frame)
 
-        folder_btn = QPushButton("📁 Choose download folder")
-        folder_btn.setMinimumHeight(36)
-        right_layout.addWidget(folder_btn)
+        # Top row: Preview and Drop Zone
+        top_right_row = QHBoxLayout()
 
-        right_layout.addWidget(QLabel("📺 Select video quality:"))
-        self.quality_selector = QComboBox()
-        self.quality_selector.addItems(["480p", "720p", "1080p", "Max quality"])
-        self.quality_selector.setMinimumHeight(30)
-        right_layout.addWidget(self.quality_selector)
+        self.right_preview_label = QLabel("Превʼю відео")
+        self.right_preview_label.setFixedSize(320, 180)
+        self.right_preview_label.setStyleSheet("background-color: #444;")
+        self.right_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.no_audio_checkbox = QCheckBox("Download without audio")
-        right_layout.addWidget(self.no_audio_checkbox)
+        self.drag_drop_area = QLabel("Перетягніть сюди відео")
+        self.drag_drop_area.setFixedSize(320, 180)
+        self.drag_drop_area.setStyleSheet("border: 2px dashed #666; background-color: #333;")
+        self.drag_drop_area.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        top_right_row.addWidget(self.right_preview_label)
+        top_right_row.addWidget(self.drag_drop_area)
+
+        right_layout.addLayout(top_right_row)
+
+        # Upload preview image
+        self.thumbnail_btn = QPushButton("Завантажити превʼю")
+        right_layout.addWidget(self.thumbnail_btn)
+
+        # Title input
+        self.title_input = QLineEdit()
+        self.title_input.setPlaceholderText("Назва відео")
+        right_layout.addWidget(self.title_input)
+
+        # Description input
+        self.description_input = QTextEdit()
+        self.description_input.setPlaceholderText("Опис відео")
+        self.description_input.setFixedHeight(120)
+        right_layout.addWidget(self.description_input)
+
+        # Upload button
+        self.upload_btn = QPushButton("Завантажити на YouTube")
+        self.upload_btn.setStyleSheet("background-color: #28a745;")
+        right_layout.addWidget(self.upload_btn)
 
         right_layout.addStretch()
 
-        # Bottom layout: progress and status
-        bottom_layout = QVBoxLayout()
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        bottom_layout.addWidget(self.progress_bar)
-
-        self.status_label = QLabel()
-        self.status_label.setWordWrap(True)
-        bottom_layout.addWidget(self.status_label)
-
-        # Combine all layouts
-        container_layout = QVBoxLayout()
-        container_layout.addLayout(main_layout)
-        container_layout.addLayout(bottom_layout)
-
-        main_layout.addLayout(left_layout)
-        main_layout.addLayout(right_layout)
-
-        self.setLayout(container_layout)
-
-        # Connect buttons and signals
-        folder_btn.clicked.connect(self.choose_download_folder)
-        self.download_btn.clicked.connect(self.download_video)
-
-        self.url_check_timer = QTimer()
-        self.url_check_timer.setInterval(200)
-        self.url_check_timer.setSingleShot(True)
-        self.url_check_timer.timeout.connect(self.fetch_video_info)
-
-        self.url_input.textChanged.connect(self.on_url_changed)
-
-        self.load_styles("styles.qss")
-
-    def load_styles(self, path):
-        """Load and apply external QSS stylesheet."""
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                self.setStyleSheet(f.read())
-        except Exception as e:
-            print(f"Failed to load styles: {e}")
-
-    def choose_download_folder(self):
-        """Open folder dialog to select download destination."""
-        folder = QFileDialog.getExistingDirectory(self, "Select folder")
-        if folder:
-            self.download_folder = folder
-            self.status_label.setText(f"📁 Save to: {folder}")
-
-    def get_format(self):
-        """Return yt-dlp format string based on selected options."""
-        quality = self.quality_selector.currentText()
-        no_audio = self.no_audio_checkbox.isChecked()
-
-        height = None
-        if quality == "480p":
-            height = 480
-        elif quality == "720p":
-            height = 720
-        elif quality == "1080p":
-            height = 1080
-
-        if quality == "Max quality":
-            return 'best[ext=mp4]' if no_audio else 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]'
-
-        if no_audio:
-            return f"bestvideo[height<={height}][ext=mp4]"
-        else:
-            return f"bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]"
-
-    def update_progress(self, percent: float):
-        """Update download progress bar."""
-        percent_int = int(percent)
-        if percent_int == 100:
-            self.progress_bar.setValue(100)
-        elif percent_int > self._last_progress:
-            self.progress_bar.setValue(percent_int)
-            self._last_progress = percent_int
-            self.status_label.setText("⏳ Downloading...")
-
-    def on_url_changed(self):
-        """Start timer to fetch video info after URL changes."""
-        self.url_check_timer.start()
+        # ======= Add frames to main layout =======
+        main_layout.addWidget(left_frame, 1)
+        main_layout.addWidget(right_frame, 1)
 
     @asyncSlot()
-    async def fetch_video_info(self):
-        """Fetch video title and thumbnail from YouTube."""
+    async def on_url_changed(self):
         url = self.url_input.text().strip()
-        if not url or ("youtube.com" not in url and "youtu.be" not in url):
-            self.video_title_label.setVisible(False)
-            self.thumbnail_label.setVisible(False)
+        if not url:
+            self.left_preview_label.setText("Превʼю відео")
             return
 
         try:
-            self.status_label.setText("🔍 Fetching video info...")
             info = await async_get_video_info(url)
-
-            self.video_title_label.setText(f"🎬 {info['title']}")
-            self.video_title_label.setVisible(True)
-
-            loop = asyncio.get_running_loop()
-            response = await loop.run_in_executor(None, partial(requests.get, info['thumbnail'], timeout=5))
-
-            pixmap = QPixmap()
-            pixmap.loadFromData(response.content)
-            self.thumbnail_label.setPixmap(pixmap.scaledToWidth(320))
-            self.thumbnail_label.setVisible(True)
-
-            self.status_label.setText("ℹ️ Video found")
+            self.left_preview_label.setText("Завантажую превʼю...")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(info['thumbnail']) as resp:
+                    if resp.status == 200:
+                        data = await resp.read()
+                        image = QImage.fromData(data)
+                        pixmap = QPixmap.fromImage(image).scaled(
+                            self.left_preview_label.width(),
+                            self.left_preview_label.height(),
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation
+                        )
+                        self.left_preview_label.setPixmap(pixmap)
+                    else:
+                        self.left_preview_label.setText("Не вдалося завантажити превʼю")
         except Exception as e:
-            self.video_title_label.setVisible(False)
-            self.thumbnail_label.setVisible(False)
-            self.status_label.setText(f"⚠️ Failed to load video: {e}")
+            print("Помилка при отриманні превʼю:", e)
+            self.left_preview_label.setText("Невірне посилання")
+
+    def select_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "Оберіть папку")
+        if folder:
+            self.selected_folder = folder
+            self.folder_btn.setText(f"📁 {folder}")
+        else:
+            self.selected_folder = "."
+
+    def cancel_download(self):
+        self.cancel_flag["cancel"] = True
+        self.cancel_btn.setEnabled(False)
+        self.download_btn.setText("Скасування...")
 
     @asyncSlot()
     async def download_video(self):
-        """Download the selected YouTube video asynchronously."""
         url = self.url_input.text().strip()
+        quality = self.quality_box.currentData()
+        folder = getattr(self, "selected_folder", ".")
+
         if not url:
-            self.status_label.setText("⚠️ Please enter a video URL")
+            self.download_btn.setText("❌ Немає посилання")
             return
 
-        fmt = self.get_format()
+        self.download_btn.setText("Завантаження...")
+        self.download_btn.setEnabled(False)
+        self.cancel_btn.setEnabled(True)
+        self.cancel_flag["cancel"] = False
 
-        self._last_progress = 0
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
-        self.status_label.setText("⏳ Downloading...")
+        def on_progress(percent):
+            self.download_btn.setText(f"Завантаження {percent:.0f}%")
 
         try:
-            self.video_path = await async_download_youtube_video(
-                url, fmt, progress_hook=self.update_progress, output_dir=self.download_folder
+            path = await async_download_youtube_video(
+                url, quality, on_progress, folder, self.cancel_flag
             )
-            self.progress_bar.setValue(100)
-            self.status_label.setText(f"✅ Downloaded to: {self.video_path}")
+            if not self.cancel_flag["cancel"]:
+                self.download_btn.setText("✅ Завантажено")
+                print(f"Файл збережено як: {path}")
+            else:
+                self.download_btn.setText("🚫 Скасовано")
         except Exception as e:
-            self.progress_bar.setVisible(False)
-            self.status_label.setText(f"❌ Error: {e}")
-
-    def choose_video(self):
-        """Select a local video file manually."""
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Choose a video file", "", "Video Files (*.mp4 *.mov *.avi *.mkv)"
-        )
-        if file_path:
-            self.video_path = file_path
-            self.status_label.setText(f"📁 Selected: {file_path}")
+            print("❌ Помилка при завантаженні:", e)
+            self.download_btn.setText("❌ Скасовано")
+        finally:
+            await asyncio.sleep(2)
+            self.download_btn.setText("Завантажити")
+            self.download_btn.setEnabled(True)
+            self.cancel_btn.setEnabled(False)

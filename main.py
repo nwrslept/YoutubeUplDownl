@@ -1,16 +1,20 @@
+# main.py
 import sys
-import asyncio
-from PyQt6.QtWidgets import QApplication
 from qasync import QEventLoop
+from PyQt6.QtWidgets import QApplication
 from ui.main_window import MainWindow
+import asyncio
 
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
 
     window = MainWindow()
-    window.show()
+    window.showMaximized()
 
     with loop:
         loop.run_forever()
+
+if __name__ == "__main__":
+    main()
