@@ -1,3 +1,5 @@
+from urllib.parse import urlparse, parse_qs
+
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
     QLineEdit, QComboBox, QFileDialog, QTextEdit, QFrame
@@ -186,6 +188,16 @@ class MainWindow(QWidget):
         main_layout.addWidget(left_frame, 1)
         main_layout.addWidget(right_frame, 1)
 
+    @staticmethod
+    def extract_video_url(url: str) -> str:
+        parsed_url = urlparse(url)
+        query_params = parse_qs(parsed_url.query)
+        video_id = query_params.get("v")
+        if video_id:
+            return f"https://www.youtube.com/watch?v={video_id[0]}"
+        else:
+            return url
+
     def load_thumbnail_from_file(self):
         """Load thumbnail image from file and show in preview."""
         path, _ = QFileDialog.getOpenFileName(
@@ -226,8 +238,10 @@ class MainWindow(QWidget):
             self.left_title_label.setText("")
             return
 
+        clean_url = self.extract_video_url(url)
+
         try:
-            info = await async_get_video_info(url)
+            info = await async_get_video_info(clean_url)
             title = info.get("title", "")
             thumbnail_url = info.get("thumbnail", "")
             self.left_title_label.setText(title or "No title found")
@@ -252,7 +266,6 @@ class MainWindow(QWidget):
                         self.left_preview_label.setText("Failed to fetch thumbnail")
         except Exception as e:
             print("Error getting preview:", e)
-            print(traceback.format_exc())
             self.left_preview_label.setText("Error loading preview")
             self.left_title_label.setText("")
 

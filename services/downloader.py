@@ -57,6 +57,8 @@ async def async_download_youtube_video(
                 }
             ],
             "concurrent_fragment_downloads": 3,
+            "playlist_items": "1",
+
         }
 
         try:
